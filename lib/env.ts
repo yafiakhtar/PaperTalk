@@ -12,14 +12,20 @@ const envSchema = z.object({
   APP_SESSION_SECRET: z.string().min(16)
 });
 
-export const env = envSchema.parse({
-  OPENAI_API_KEY: process.env.OPENAI_API_KEY,
-  OPENAI_REALTIME_MODEL: process.env.OPENAI_REALTIME_MODEL,
-  OPENAI_EMBEDDING_MODEL: process.env.OPENAI_EMBEDDING_MODEL,
-  OPENAI_OCR_MODEL: process.env.OPENAI_OCR_MODEL,
-  SUPABASE_URL: process.env.SUPABASE_URL,
-  SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
-  VERCEL_BLOB_READ_WRITE_TOKEN: process.env.VERCEL_BLOB_READ_WRITE_TOKEN,
-  APP_AUTH_PASSWORD: process.env.APP_AUTH_PASSWORD,
-  APP_SESSION_SECRET: process.env.APP_SESSION_SECRET
-});
+let cached: z.infer<typeof envSchema> | null = null;
+
+export function getEnv() {
+  if (cached) return cached;
+  cached = envSchema.parse({
+    OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+    OPENAI_REALTIME_MODEL: process.env.OPENAI_REALTIME_MODEL,
+    OPENAI_EMBEDDING_MODEL: process.env.OPENAI_EMBEDDING_MODEL,
+    OPENAI_OCR_MODEL: process.env.OPENAI_OCR_MODEL,
+    SUPABASE_URL: process.env.SUPABASE_URL,
+    SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
+    VERCEL_BLOB_READ_WRITE_TOKEN: process.env.VERCEL_BLOB_READ_WRITE_TOKEN,
+    APP_AUTH_PASSWORD: process.env.APP_AUTH_PASSWORD,
+    APP_SESSION_SECRET: process.env.APP_SESSION_SECRET
+  });
+  return cached;
+}

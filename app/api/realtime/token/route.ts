@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/api-auth";
 import { rateLimit } from "@/lib/rate-limit";
 import { getClientIp } from "@/lib/ip";
-import { env } from "@/lib/env";
+import { getEnv } from "@/lib/env";
 
 export const runtime = "nodejs";
 
@@ -20,6 +20,7 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
   const instructions = typeof body?.instructions === "string" ? body.instructions : "You are a helpful research assistant.";
 
+  const env = getEnv();
   const response = await fetch("https://api.openai.com/v1/realtime/client_secrets", {
     method: "POST",
     headers: {

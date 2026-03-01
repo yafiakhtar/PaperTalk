@@ -1,7 +1,9 @@
-import { openai } from "./openai";
-import { env } from "./env";
+import { getOpenAI } from "./openai";
+import { getEnv } from "./env";
 
 export async function extractTextWithOpenAI(buffer: ArrayBuffer) {
+  const env = getEnv();
+  const openai = getOpenAI();
   const base64 = Buffer.from(buffer).toString("base64");
   const response = await openai.responses.create({
     model: env.OPENAI_OCR_MODEL,

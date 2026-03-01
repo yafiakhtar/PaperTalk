@@ -1,4 +1,12 @@
 import OpenAI from "openai";
-import { env } from "./env";
+import { getEnv } from "./env";
 
-export const openai = new OpenAI({ apiKey: env.OPENAI_API_KEY });
+let client: OpenAI | null = null;
+
+export function getOpenAI() {
+  if (!client) {
+    const env = getEnv();
+    client = new OpenAI({ apiKey: env.OPENAI_API_KEY });
+  }
+  return client;
+}

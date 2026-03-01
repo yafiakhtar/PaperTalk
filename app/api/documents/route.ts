@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/api-auth";
-import { supabaseAdmin } from "@/lib/supabase";
+import { getSupabaseAdmin } from "@/lib/supabase";
 
 export const runtime = "nodejs";
 
@@ -9,6 +9,7 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const supabaseAdmin = getSupabaseAdmin();
   const { data, error } = await supabaseAdmin
     .from("documents")
     .select("id, title, status, created_at, page_count")

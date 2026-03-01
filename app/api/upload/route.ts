@@ -4,7 +4,7 @@ import { requireAuth } from "@/lib/api-auth";
 import { rateLimit } from "@/lib/rate-limit";
 import { getClientIp } from "@/lib/ip";
 import { uploadPdf } from "@/lib/blob";
-import { supabaseAdmin } from "@/lib/supabase";
+import { getSupabaseAdmin } from "@/lib/supabase";
 
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
 export const runtime = "nodejs";
@@ -37,6 +37,7 @@ export async function POST(request: Request) {
   const buffer = await file.arrayBuffer();
   const blob = await uploadPdf(`${crypto.randomUUID()}.pdf`, buffer);
 
+  const supabaseAdmin = getSupabaseAdmin();
   const { data, error } = await supabaseAdmin
     .from("documents")
     .insert({

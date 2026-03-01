@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/api-auth";
 import { rateLimit } from "@/lib/rate-limit";
 import { getClientIp } from "@/lib/ip";
-import { supabaseAdmin } from "@/lib/supabase";
+import { getSupabaseAdmin } from "@/lib/supabase";
 import { fetchBlob } from "@/lib/blob";
 import { parsePdf, isLikelyScanned } from "@/lib/pdf";
 import { extractTextWithOpenAI } from "@/lib/ocr";
@@ -29,6 +29,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "documentId required" }, { status: 400 });
   }
 
+  const supabaseAdmin = getSupabaseAdmin();
   const { data: document, error } = await supabaseAdmin
     .from("documents")
     .select("id, blob_url, status")

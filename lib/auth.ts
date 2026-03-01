@@ -1,9 +1,10 @@
 import crypto from "crypto";
-import { env } from "./env";
+import { getEnv } from "./env";
 
 const COOKIE_NAME = "papertalk_auth";
 
 function hmac(value: string) {
+  const env = getEnv();
   return crypto
     .createHmac("sha256", env.APP_SESSION_SECRET)
     .update(value)
@@ -35,6 +36,7 @@ function decodeCookieValue(value: string) {
 }
 
 export function validatePassword(password: string) {
+  const env = getEnv();
   const provided = crypto.createHash("sha256").update(password).digest("hex");
   const expected = crypto.createHash("sha256").update(env.APP_AUTH_PASSWORD).digest("hex");
   return crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(expected));

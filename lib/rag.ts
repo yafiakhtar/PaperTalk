@@ -1,5 +1,5 @@
-import { openai } from "./openai";
-import { env } from "./env";
+import { getOpenAI } from "./openai";
+import { getEnv } from "./env";
 
 export type Chunk = {
   text: string;
@@ -33,6 +33,8 @@ export function chunkText(raw: string, maxChars = 3000): Chunk[] {
 
 export async function embedTexts(texts: string[]) {
   if (texts.length === 0) return [];
+  const env = getEnv();
+  const openai = getOpenAI();
   const response = await openai.embeddings.create({
     model: env.OPENAI_EMBEDDING_MODEL,
     input: texts

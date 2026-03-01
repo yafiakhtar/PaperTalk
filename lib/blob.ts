@@ -1,7 +1,8 @@
 import { put } from "@vercel/blob";
-import { env } from "./env";
+import { getEnv } from "./env";
 
 export async function uploadPdf(name: string, data: ArrayBuffer) {
+  const env = getEnv();
   const result = await put(name, data, {
     access: "public",
     contentType: "application/pdf",
@@ -12,6 +13,7 @@ export async function uploadPdf(name: string, data: ArrayBuffer) {
 }
 
 export async function fetchBlob(url: string) {
+  const env = getEnv();
   const response = await fetch(url, {
     headers: {
       Authorization: `Bearer ${env.VERCEL_BLOB_READ_WRITE_TOKEN}`
