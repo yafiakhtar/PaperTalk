@@ -10,7 +10,7 @@ interface TypingTextProps {
   className?: string;
 }
 
-export function TypingText({ text, speed = 55, onComplete, className }: TypingTextProps) {
+export function TypingText({ text, speed = 95, onComplete, className }: TypingTextProps) {
   const [displayed, setDisplayed] = useState("");
   const [done, setDone] = useState(false);
 

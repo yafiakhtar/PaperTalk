@@ -1,5 +1,5 @@
-import { AuthScreen } from "@/components/auth/auth-screen";
+import { LandingFlow } from "@/components/landing/landing-flow";
 
 export default function AuthPage() {
-  return <AuthScreen />;
+  return <LandingFlow initialPhase="auth" />;
 }
