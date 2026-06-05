@@ -1,33 +1,32 @@
 # PaperTalk
 
-PaperTalk is a Next.js app for uploading private PDFs, processing them in the background, and chatting with grounded, page-cited answers.
+Upload research papers and talk to an AI assistant. This is the **UI-only** phase — mock data, no backend.
 
 ## Stack
 
-- Next.js App Router on Vercel
-- Supabase Auth, Storage, and Postgres (`pgvector`)
-- Vercel Queues for background processing
-- OpenAI embeddings for retrieval
-- Anthropic Claude for answer generation and OCR fallback
+- Next.js 15 (App Router)
+- Tailwind CSS v4
+- shadcn/ui (monochrome)
+- next-themes (system / light / dark)
 
-## Local setup
+## Run locally
 
-1. Copy `.env.example` to `.env.local` and fill in the required keys.
-2. Apply `supabase/migrations/0001_papertalk.sql` to your Supabase project.
-3. Install dependencies with `npm install`.
-4. Run the app with `npm run dev`.
+```bash
+npm install
+npm run dev
+```
 
-## Core flow
+Open [http://localhost:3000](http://localhost:3000).
 
-1. Sign in with a magic link.
-2. Upload a PDF into the private `papers` bucket.
-3. `POST /api/papers` creates a `queued` paper and publishes a queue job.
-4. The queue consumer extracts text, falls back to Claude OCR if needed, chunks text, generates embeddings, and marks the paper `ready`.
-5. Once ready, chat uses vector search plus Claude answers with page-linked citations.
+## Flow
 
-## Notes
+1. `/` — Splash with typing animation
+2. `/auth` — Sign in UI + **Continue to Demo**
+3. `/app` — Three-panel workspace (sidebar, PDF viewer, chat/voice)
 
-- V1 uses one persistent thread per paper.
-- Chat stays disabled until processing completes.
-- Uploads are capped at 20 MB and 50 pages by default.
-- The viewer uses short-lived signed URLs generated server-side.
+## Later phases
+
+- Supabase Auth, Postgres, Storage
+- PDF upload and processing
+- RAG chat with free models
+- Voice STT/TTS backend
