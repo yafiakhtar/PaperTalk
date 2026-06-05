@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { AuthContent } from "@/components/auth/auth-content";
+import { AuthContent, type AuthMode } from "@/components/auth/auth-content";
 import { TypingText } from "@/components/splash/typing-text";
 import { cn } from "@/lib/utils";
 
@@ -12,9 +12,17 @@ type Phase = "typing" | "auth";
 
 interface LandingFlowProps {
   initialPhase?: Phase;
+  authMode?: AuthMode;
+  authError?: string;
+  nextPath?: string;
 }
 
-export function LandingFlow({ initialPhase = "typing" }: LandingFlowProps) {
+export function LandingFlow({
+  initialPhase = "typing",
+  authMode,
+  authError,
+  nextPath
+}: LandingFlowProps) {
   const [phase, setPhase] = useState<Phase>(initialPhase);
   const [showAuth, setShowAuth] = useState(initialPhase === "auth");
 
@@ -50,7 +58,7 @@ export function LandingFlow({ initialPhase = "typing" }: LandingFlowProps) {
         aria-hidden={!showAuth}
       >
         <div className="mx-auto flex justify-center">
-          <AuthContent />
+          <AuthContent initialMode={authMode} initialError={authError} nextPath={nextPath} />
         </div>
       </div>
     </main>
