@@ -9,6 +9,12 @@ function getSafeNextPath(pathname: string) {
 }
 
 export async function updateSession(request: NextRequest) {
+  const isProtectedPath = request.nextUrl.pathname.startsWith("/app");
+
+  if (!isProtectedPath) {
+    return NextResponse.next({ request });
+  }
+
   let response = NextResponse.next({ request });
   const { url, key } = getSupabasePublicConfig();
 
@@ -38,7 +44,7 @@ export async function updateSession(request: NextRequest) {
     data: { user }
   } = await supabase.auth.getUser();
 
-  if (!user && request.nextUrl.pathname.startsWith("/app")) {
+  if (!user) {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = "/auth";
     redirectUrl.search = "";
