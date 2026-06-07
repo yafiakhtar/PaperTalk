@@ -1,7 +1,8 @@
 "use client";
 
-import { type FormEvent, type ReactNode, useMemo, useState } from "react";
+import { type ComponentProps, type FormEvent, type ReactNode, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -245,10 +246,9 @@ export function AuthContent({
           <form className="space-y-4" onSubmit={handleUpdatePassword}>
             <div className="space-y-2">
               <Label htmlFor="new-password">New password</Label>
-              <Input
+              <PasswordInput
                 id="new-password"
                 name="new-password"
-                type="password"
                 placeholder="••••••••"
                 autoComplete="new-password"
                 minLength={6}
@@ -257,10 +257,9 @@ export function AuthContent({
             </div>
             <div className="space-y-2">
               <Label htmlFor="confirm-password">Confirm password</Label>
-              <Input
+              <PasswordInput
                 id="confirm-password"
                 name="confirm-password"
-                type="password"
                 placeholder="••••••••"
                 autoComplete="new-password"
                 minLength={6}
@@ -305,10 +304,9 @@ export function AuthContent({
             </div>
             <div className="space-y-2">
               <Label htmlFor="signup-password">Password</Label>
-              <Input
+              <PasswordInput
                 id="signup-password"
                 name="signup-password"
-                type="password"
                 placeholder="••••••••"
                 autoComplete="new-password"
                 minLength={6}
@@ -336,10 +334,9 @@ export function AuthContent({
             </div>
             <div className="space-y-2">
               <Label htmlFor="login-password">Password</Label>
-              <Input
+              <PasswordInput
                 id="login-password"
                 name="login-password"
-                type="password"
                 placeholder="••••••••"
                 autoComplete="current-password"
                 required
@@ -359,6 +356,31 @@ export function AuthContent({
         </TabsContent>
       </Tabs>
     </AuthFrame>
+  );
+}
+
+function PasswordInput({ className, ...props }: Omit<ComponentProps<typeof Input>, "type">) {
+  const [isVisible, setIsVisible] = useState(false);
+  const Icon = isVisible ? EyeOff : Eye;
+
+  return (
+    <div className="relative">
+      <Input
+        {...props}
+        type={isVisible ? "text" : "password"}
+        className={cn("pr-10", className)}
+      />
+      <Button
+        type="button"
+        size="icon"
+        className="absolute right-2 top-1/2 h-5 w-5 -translate-y-1/2 rounded-none bg-transparent p-0 text-muted-foreground shadow-none hover:bg-transparent hover:text-foreground"
+        aria-label={isVisible ? "Hide password" : "Show password"}
+        aria-pressed={isVisible}
+        onClick={() => setIsVisible((value) => !value)}
+      >
+        <Icon className="h-4 w-4" />
+      </Button>
+    </div>
   );
 }
 
