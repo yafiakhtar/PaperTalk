@@ -71,6 +71,19 @@
   --ring: rgba(255, 255, 255, 0.2);
 }
 
+.auth-password-input::-ms-reveal,
+.auth-password-input::-ms-clear {
+  display: none;
+}
+
+.auth-password-input::-webkit-credentials-auto-fill-button,
+.auth-password-input::-webkit-caps-lock-indicator,
+.auth-password-input::-webkit-textfield-decoration-container {
+  display: none !important;
+  visibility: hidden;
+  pointer-events: none;
+}
+
 @layer base {
   * {
     @apply border-border;

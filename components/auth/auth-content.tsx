@@ -381,16 +381,19 @@ export function AuthContent({
   );
 }
 
-function PasswordInput({ className, ...props }: Omit<ComponentProps<typeof Input>, "type">) {
+function PasswordInput({
+  className,
+  ...props
+}: Omit<ComponentProps<typeof Input>, "type">) {
   const [isVisible, setIsVisible] = useState(false);
-  const Icon = isVisible ? EyeOff : Eye;
+  const Icon = isVisible ? Eye : EyeOff;
 
   return (
     <div className="relative">
       <Input
         {...props}
         type={isVisible ? "text" : "password"}
-        className={cn("pr-10", className)}
+        className={cn("auth-password-input pr-10", className)}
       />
       <Button
         type="button"
@@ -398,7 +401,9 @@ function PasswordInput({ className, ...props }: Omit<ComponentProps<typeof Input
         className="absolute right-2 top-1/2 h-5 w-5 -translate-y-1/2 rounded-none bg-transparent p-0 text-muted-foreground shadow-none hover:bg-transparent hover:text-foreground"
         aria-label={isVisible ? "Hide password" : "Show password"}
         aria-pressed={isVisible}
-        onClick={() => setIsVisible((value) => !value)}
+        title={isVisible ? "Hide password" : "Show password"}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={() => setIsVisible((nextValue) => !nextValue)}
       >
         <Icon className="h-4 w-4" />
       </Button>
