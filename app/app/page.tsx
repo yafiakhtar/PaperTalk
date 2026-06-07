@@ -12,5 +12,17 @@ export default async function AppPage() {
     redirect("/auth?next=/app");
   }
 
-  return <WorkspaceShell />;
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("username")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  return (
+    <WorkspaceShell
+      userId={user.id}
+      userEmail={user.email ?? null}
+      userName={profile?.username ?? null}
+    />
+  );
 }

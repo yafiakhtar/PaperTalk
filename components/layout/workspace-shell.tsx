@@ -9,7 +9,13 @@ import { PdfViewer } from "@/components/paper/pdf-viewer";
 import { UploadOverlay } from "@/components/paper/upload-overlay";
 import { MOCK_INITIAL_MESSAGES, MOCK_PAPERS, type MockMessage } from "@/lib/mock-data";
 
-export function WorkspaceShell() {
+interface WorkspaceShellProps {
+  userId: string;
+  userEmail: string | null;
+  userName: string | null;
+}
+
+export function WorkspaceShell({ userId, userEmail, userName }: WorkspaceShellProps) {
   const [readMode, setReadMode] = useState(false);
   const [assistantExpanded, setAssistantExpanded] = useState(true);
   const [selectedPaperId, setSelectedPaperId] = useState<string | null>(null);
@@ -67,6 +73,9 @@ export function WorkspaceShell() {
       <div className="flex min-h-0 flex-1">
         <Sidebar
           readMode={readMode}
+          userId={userId}
+          userEmail={userEmail}
+          userName={userName}
           selectedPaperId={selectedPaperId}
           onSelectPaper={handleSelectPaper}
         />
