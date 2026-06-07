@@ -1,6 +1,13 @@
 "use client";
 
-import { type ComponentProps, type FormEvent, type ReactNode, useMemo, useState } from "react";
+import {
+  type ComponentProps,
+  type FormEvent,
+  type ReactNode,
+  useEffect,
+  useMemo,
+  useState
+} from "react";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
@@ -63,6 +70,15 @@ export function AuthContent({
   const [passwordUpdated, setPasswordUpdated] = useState(false);
 
   const safeNextPath = useMemo(() => getSafeNextPath(nextPath), [nextPath]);
+
+  useEffect(() => {
+    setMode(initialMode);
+    setLoading(null);
+    setErrorMessage(getInitialError(initialError));
+    setNoticeMessage(null);
+    setCheckEmail(null);
+    setPasswordUpdated(false);
+  }, [initialMode, initialError, nextPath]);
 
   const setAuthMode = (nextMode: AuthMode) => {
     setMode(nextMode);
@@ -178,6 +194,7 @@ export function AuthContent({
       return;
     }
 
+    await supabase.auth.signOut();
     setPasswordUpdated(true);
     toast.success("Password updated");
   };
@@ -239,8 +256,12 @@ export function AuthContent({
         noticeMessage={passwordUpdated ? "Your password has been updated." : noticeMessage}
       >
         {passwordUpdated ? (
-          <Button className="w-full" onClick={() => router.push("/app")}>
-            Continue to PaperTalk
+          <Button
+            className="w-full"
+            type="button"
+            onClick={() => router.replace("/auth?mode=login")}
+          >
+            Back to Log In
           </Button>
         ) : (
           <form className="space-y-4" onSubmit={handleUpdatePassword}>
@@ -317,6 +338,7 @@ export function AuthContent({
               {loading === "signup" ? "Creating Account..." : "Create Account"}
             </Button>
           </form>
+          <div className="mt-3 h-9" aria-hidden="true" />
         </TabsContent>
 
         <TabsContent value="login" className="mt-4">
