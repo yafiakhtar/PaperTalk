@@ -167,6 +167,10 @@ export function WorkspaceShell({
     setSelectedPaperId(paperId);
   };
 
+  const handleClosePaper = () => {
+    setSelectedPaperId(null);
+  };
+
   const handleDeletePaper = async (paperId: string) => {
     const paper = papers.find((currentPaper) => currentPaper.id === paperId);
     if (!paper || deletingPaperId) return;
@@ -221,7 +225,7 @@ export function WorkspaceShell({
 
         <main className="relative min-w-0 flex-1 border-r border-border">
           {selectedPaper ? (
-            <PdfViewer paper={selectedPaper} />
+            <PdfViewer paper={selectedPaper} onClose={handleClosePaper} />
           ) : (
             <>
               <EmptyState />

@@ -1,16 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertCircle, Loader2 } from "lucide-react";
+import { AlertCircle, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PAPERS_BUCKET, formatFileSize, type Paper } from "@/lib/papers";
 import { getBrowserSupabaseClient } from "@/lib/supabase/client";
 
 interface PdfViewerProps {
   paper: Paper;
+  onClose: () => void;
 }
 
-export function PdfViewer({ paper }: PdfViewerProps) {
+export function PdfViewer({ paper, onClose }: PdfViewerProps) {
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -70,13 +71,25 @@ export function PdfViewer({ paper }: PdfViewerProps) {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="border-b border-border px-4 py-2">
-        <p className="truncate text-sm font-medium">{paper.title}</p>
-        <p className="text-xs text-muted-foreground">
-          {paper.status === "ready"
-            ? `${formatFileSize(paper.file_size)} PDF`
-            : "Finalizing upload..."}
-        </p>
+      <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-2">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium">{paper.title}</p>
+          <p className="text-xs text-muted-foreground">
+            {paper.status === "ready"
+              ? `${formatFileSize(paper.file_size)} PDF`
+              : "Finalizing upload..."}
+          </p>
+        </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 shrink-0"
+          onClick={onClose}
+          aria-label="Close paper"
+          title="Close paper"
+        >
+          <X className="h-4 w-4" />
+        </Button>
       </div>
 
       <div className="min-h-0 flex-1 bg-muted/30">
