@@ -2,20 +2,25 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Send } from "lucide-react";
-import { MOCK_ASSISTANT_REPLY, type MockMessage } from "@/lib/mock-data";
+import { type Message } from "@/lib/messages";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 interface ChatPanelProps {
-  messages: MockMessage[];
-  onMessagesChange: (messages: MockMessage[]) => void;
+  messages: Message[];
+  onMessagesChange: (messages: Message[]) => void;
   disabled?: boolean;
+  disabledMessage?: string;
 }
 
-export function ChatPanel({ messages, onMessagesChange, disabled }: ChatPanelProps) {
+export function ChatPanel({
+  messages,
+  onMessagesChange,
+  disabled,
+  disabledMessage = "Paper chat is coming in the next stage."
+}: ChatPanelProps) {
   const [input, setInput] = useState("");
-  const [isSending, setIsSending] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -24,9 +29,9 @@ export function ChatPanel({ messages, onMessagesChange, disabled }: ChatPanelPro
 
   const handleSend = () => {
     const trimmed = input.trim();
-    if (!trimmed || isSending || disabled) return;
+    if (!trimmed || disabled) return;
 
-    const userMessage: MockMessage = {
+    const userMessage: Message = {
       id: `user-${Date.now()}`,
       role: "user",
       content: trimmed
@@ -35,17 +40,6 @@ export function ChatPanel({ messages, onMessagesChange, disabled }: ChatPanelPro
     const withUser = [...messages, userMessage];
     onMessagesChange(withUser);
     setInput("");
-    setIsSending(true);
-
-    window.setTimeout(() => {
-      const assistantMessage: MockMessage = {
-        id: `assistant-${Date.now()}`,
-        role: "assistant",
-        content: MOCK_ASSISTANT_REPLY
-      };
-      onMessagesChange([...withUser, assistantMessage]);
-      setIsSending(false);
-    }, 500);
   };
 
   return (
@@ -72,10 +66,10 @@ export function ChatPanel({ messages, onMessagesChange, disabled }: ChatPanelPro
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleSend()}
-          placeholder={disabled ? "Upload a paper first…" : "Ask about the paper…"}
-          disabled={disabled || isSending}
+          placeholder={disabled ? disabledMessage : "Ask about the paper..."}
+          disabled={disabled}
         />
-        <Button size="icon" onClick={handleSend} disabled={disabled || isSending || !input.trim()}>
+        <Button size="icon" onClick={handleSend} disabled={disabled || !input.trim()}>
           <Send className="h-4 w-4" />
         </Button>
       </div>

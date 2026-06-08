@@ -2,12 +2,22 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { Clock, FileText, LogOut, MessageSquarePlus, Settings } from "lucide-react";
+import {
+  Clock,
+  FileText,
+  Loader2,
+  LogOut,
+  MessageSquarePlus,
+  Settings,
+  Trash2,
+  Upload
+} from "lucide-react";
 import { toast } from "sonner";
-import { MOCK_PAPERS, type MockPaper } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { UploadButton } from "@/components/paper/upload-button";
+import { formatFileSize, type Paper } from "@/lib/papers";
 import { getBrowserSupabaseClient } from "@/lib/supabase/client";
 
 interface SidebarProps {
@@ -15,8 +25,13 @@ interface SidebarProps {
   userId: string;
   userEmail: string | null;
   userName: string | null;
+  papers: Paper[];
   selectedPaperId: string | null;
+  isUploading: boolean;
+  onUploadPaper: (file: File) => void;
   onSelectPaper: (paperId: string) => void;
+  onDeletePaper: (paperId: string) => void;
+  deletingPaperId: string | null;
 }
 
 const USERNAME_PATTERN = /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,31}$/;
@@ -42,8 +57,13 @@ export function Sidebar({
   userId,
   userEmail,
   userName,
+  papers,
   selectedPaperId,
-  onSelectPaper
+  isUploading,
+  onUploadPaper,
+  onSelectPaper,
+  onDeletePaper,
+  deletingPaperId
 }: SidebarProps) {
   const router = useRouter();
   const [isSigningOut, setIsSigningOut] = useState(false);
@@ -157,13 +177,36 @@ export function Sidebar({
 
       {!readMode && (
         <div className="flex flex-1 flex-col gap-1 overflow-y-auto border-t border-border p-2">
-          <p className="px-2 py-1 text-xs text-muted-foreground">Papers</p>
-          {MOCK_PAPERS.map((paper) => (
+          <div className="flex items-center justify-between gap-2 px-2 py-1">
+            <p className="text-xs text-muted-foreground">Papers</p>
+            <UploadButton
+              isUploading={isUploading}
+              onUpload={onUploadPaper}
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              ariaLabel="Upload PDF"
+            >
+              {isUploading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Upload className="h-3.5 w-3.5" />
+              )}
+            </UploadButton>
+          </div>
+          {papers.length === 0 && (
+            <p className="px-2 py-2 text-sm text-muted-foreground">
+              Uploaded PDFs will appear here.
+            </p>
+          )}
+          {papers.map((paper) => (
             <PaperItem
               key={paper.id}
               paper={paper}
               selected={selectedPaperId === paper.id}
               onSelect={() => onSelectPaper(paper.id)}
+              onDelete={() => onDeletePaper(paper.id)}
+              isDeleting={deletingPaperId === paper.id}
             />
           ))}
         </div>
@@ -259,25 +302,50 @@ export function Sidebar({
 function PaperItem({
   paper,
   selected,
-  onSelect
+  onSelect,
+  onDelete,
+  isDeleting
 }: {
-  paper: MockPaper;
+  paper: Paper;
   selected: boolean;
   onSelect: () => void;
+  onDelete: () => void;
+  isDeleting: boolean;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onSelect}
+    <div
       className={cn(
-        "rounded-md px-2 py-2 text-left text-sm transition-colors hover:bg-muted",
-        selected && "border-l-2 border-foreground bg-muted pl-[6px]"
+        "group flex items-start rounded-md transition-colors hover:bg-muted",
+        selected && "border-l-2 border-foreground bg-muted"
       )}
     >
-      <span className="line-clamp-2">{paper.title}</span>
-      {paper.status === "processing" && (
-        <span className="mt-0.5 block text-xs text-muted-foreground">Processing…</span>
-      )}
-    </button>
+      <button
+        type="button"
+        onClick={onSelect}
+        className={cn(
+          "min-w-0 flex-1 px-2 py-2 text-left text-sm",
+          selected && "pl-[6px]"
+        )}
+      >
+        <span className="line-clamp-2">{paper.title}</span>
+        <span className="mt-0.5 block text-xs text-muted-foreground">
+          {paper.status === "ready" ? formatFileSize(paper.file_size) : "Uploading..."}
+        </span>
+      </button>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="mr-1 mt-1 h-7 w-7 shrink-0 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+        disabled={isDeleting}
+        aria-label={`Delete ${paper.title}`}
+        onClick={onDelete}
+      >
+        {isDeleting ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        ) : (
+          <Trash2 className="h-3.5 w-3.5" />
+        )}
+      </Button>
+    </div>
   );
 }

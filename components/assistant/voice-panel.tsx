@@ -7,9 +7,13 @@ import { cn } from "@/lib/utils";
 
 interface VoicePanelProps {
   disabled?: boolean;
+  disabledMessage?: string;
 }
 
-export function VoicePanel({ disabled }: VoicePanelProps) {
+export function VoicePanel({
+  disabled,
+  disabledMessage = "Paper chat is coming in the next stage."
+}: VoicePanelProps) {
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState("");
   const recognitionRef = useRef<SpeechRecognition | null>(null);
@@ -75,9 +79,9 @@ export function VoicePanel({ disabled }: VoicePanelProps) {
 
       <p className="text-sm text-muted-foreground">
         {disabled
-          ? "Upload a paper to use voice"
+          ? disabledMessage
           : isListening
-            ? "Listening…"
+            ? "Listening..."
             : "Tap the mic to speak"}
       </p>
 

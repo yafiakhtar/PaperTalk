@@ -3,7 +3,7 @@
 import { MessageSquare } from "lucide-react";
 import { ChatPanel } from "@/components/assistant/chat-panel";
 import { VoicePanel } from "@/components/assistant/voice-panel";
-import { type MockMessage } from "@/lib/mock-data";
+import { type Message } from "@/lib/messages";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -11,9 +11,10 @@ interface AssistantPanelProps {
   readMode: boolean;
   collapsed: boolean;
   onExpand: () => void;
-  messages: MockMessage[];
-  onMessagesChange: (messages: MockMessage[]) => void;
+  messages: Message[];
+  onMessagesChange: (messages: Message[]) => void;
   chatEnabled: boolean;
+  disabledMessage?: string;
 }
 
 export function AssistantPanel({
@@ -22,34 +23,36 @@ export function AssistantPanel({
   onExpand,
   messages,
   onMessagesChange,
-  chatEnabled
+  chatEnabled,
+  disabledMessage
 }: AssistantPanelProps) {
   const panelContent = (
     <div className="flex h-full w-[360px] flex-col">
-        <Tabs defaultValue="chat" className="flex h-full flex-col">
-          <div className="border-b border-border px-4 py-3">
-            <TabsList className="w-full">
-              <TabsTrigger value="chat" className="flex-1">
-                Chat
-              </TabsTrigger>
-              <TabsTrigger value="voice" className="flex-1">
-                Voice
-              </TabsTrigger>
-            </TabsList>
-          </div>
+      <Tabs defaultValue="chat" className="flex h-full flex-col">
+        <div className="border-b border-border px-4 py-3">
+          <TabsList className="w-full">
+            <TabsTrigger value="chat" className="flex-1">
+              Chat
+            </TabsTrigger>
+            <TabsTrigger value="voice" className="flex-1">
+              Voice
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
-          <TabsContent value="chat" className="mt-0 flex-1 overflow-hidden">
-            <ChatPanel
-              messages={messages}
-              onMessagesChange={onMessagesChange}
-              disabled={!chatEnabled}
-            />
-          </TabsContent>
+        <TabsContent value="chat" className="mt-0 flex-1 overflow-hidden">
+          <ChatPanel
+            messages={messages}
+            onMessagesChange={onMessagesChange}
+            disabled={!chatEnabled}
+            disabledMessage={disabledMessage}
+          />
+        </TabsContent>
 
-          <TabsContent value="voice" className="mt-0 flex-1 overflow-hidden">
-            <VoicePanel disabled={!chatEnabled} />
-          </TabsContent>
-        </Tabs>
+        <TabsContent value="voice" className="mt-0 flex-1 overflow-hidden">
+          <VoicePanel disabled={!chatEnabled} disabledMessage={disabledMessage} />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 
