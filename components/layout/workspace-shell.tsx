@@ -19,18 +19,16 @@ import {
   isPdfFile,
   type Paper
 } from "@/lib/papers";
-import { type Message } from "@/lib/messages";
-
-const INITIAL_MESSAGES: Message[] = [
-  {
-    id: "paper-chat-next",
-    role: "assistant",
-    content: "Upload a PDF to extract its text. Paper chat is coming in the next stage."
-  }
-];
+import { MESSAGE_SELECT, normalizeMessage, type Message } from "@/lib/messages";
 
 interface ExtractPaperResponse {
   paper?: Paper | null;
+  error?: string;
+}
+
+interface ChatPaperResponse {
+  userMessage?: Message;
+  assistantMessage?: Message;
   error?: string;
 }
 
@@ -48,26 +46,26 @@ function getUploadErrorMessage(error: unknown) {
 
 function getAssistantDisabledMessage(selectedPaper: Paper | null) {
   if (!selectedPaper) {
-    return "Upload a PDF to extract its text. Paper chat comes next.";
+    return "Upload a PDF to start PaperChat.";
   }
 
   if (selectedPaper.status !== "ready") {
-    return "Finish uploading this PDF. Paper chat comes next.";
+    return "Finish uploading this PDF before chatting.";
   }
 
   if (selectedPaper.extraction_status === "extracting") {
-    return "Extracting text from this PDF. Paper chat comes next.";
+    return "Extracting text from this PDF before chatting.";
   }
 
   if (selectedPaper.extraction_status === "completed") {
-    return "Paper text is ready. Paper chat comes in the next stage.";
+    return "Ask about this paper.";
   }
 
   if (selectedPaper.extraction_status === "failed") {
     return "Text extraction failed for this PDF. Paper chat needs selectable paper text.";
   }
 
-  return "Extracting paper text comes first. Paper chat comes next.";
+  return "Extracting paper text comes first.";
 }
 
 export function WorkspaceShell({
@@ -84,9 +82,13 @@ export function WorkspaceShell({
   );
   const [isUploading, setIsUploading] = useState(false);
   const [deletingPaperId, setDeletingPaperId] = useState<string | null>(null);
-  const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  const [isSendingMessage, setIsSendingMessage] = useState(false);
+  const [isClearingMessages, setIsClearingMessages] = useState(false);
   const extractingPaperIdsRef = useRef(new Set<string>());
   const attemptedExtractionIdsRef = useRef(new Set<string>());
+  const selectedPaperIdRef = useRef(selectedPaperId);
 
   const selectedPaper = useMemo(
     () => papers.find((paper) => paper.id === selectedPaperId) ?? null,
@@ -94,6 +96,12 @@ export function WorkspaceShell({
   );
 
   const assistantDisabledMessage = getAssistantDisabledMessage(selectedPaper);
+  const chatEnabled =
+    selectedPaper?.status === "ready" && selectedPaper.extraction_status === "completed";
+
+  useEffect(() => {
+    selectedPaperIdRef.current = selectedPaperId;
+  }, [selectedPaperId]);
 
   const handleReadModeChange = (value: boolean) => {
     setReadMode(value);
@@ -192,6 +200,45 @@ export function WorkspaceShell({
     startExtraction
   ]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!selectedPaperId) {
+      setMessages([]);
+      setIsLoadingMessages(false);
+      return;
+    }
+
+    const loadMessages = async () => {
+      setIsLoadingMessages(true);
+      const supabase = getBrowserSupabaseClient();
+      const { data, error } = await supabase
+        .from("paper_messages")
+        .select(MESSAGE_SELECT)
+        .eq("paper_id", selectedPaperId)
+        .eq("owner_id", userId)
+        .order("created_at", { ascending: true });
+
+      if (cancelled) return;
+
+      setIsLoadingMessages(false);
+
+      if (error) {
+        setMessages([]);
+        toast.error(error.message);
+        return;
+      }
+
+      setMessages(((data ?? []) as Record<string, unknown>[]).map(normalizeMessage));
+    };
+
+    void loadMessages();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedPaperId, userId]);
+
   const handleUpload = async (file: File) => {
     if (isUploading) return;
 
@@ -285,6 +332,88 @@ export function WorkspaceShell({
     setSelectedPaperId(null);
   };
 
+  const handleSendMessage = useCallback(
+    async (content: string) => {
+      if (!selectedPaper || !chatEnabled || isSendingMessage) return;
+
+      const paperId = selectedPaper.id;
+      const optimisticId = `local-user-${Date.now()}`;
+      const optimisticMessage: Message = {
+        id: optimisticId,
+        role: "user",
+        content,
+        citations: []
+      };
+
+      setMessages((currentMessages) => [...currentMessages, optimisticMessage]);
+      setIsSendingMessage(true);
+
+      try {
+        const response = await fetch(`/api/papers/${paperId}/chat`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ content })
+        });
+        const body = (await response
+          .json()
+          .catch(() => ({}))) as ChatPaperResponse;
+
+        if (!response.ok || !body.userMessage || !body.assistantMessage) {
+          throw new Error(body.error || "Could not answer this question.");
+        }
+
+        if (selectedPaperIdRef.current === paperId) {
+          setMessages((currentMessages) => [
+            ...currentMessages.filter((message) => message.id !== optimisticId),
+            body.userMessage as Message,
+            body.assistantMessage as Message
+          ]);
+        }
+      } catch (error) {
+        if (selectedPaperIdRef.current === paperId) {
+          setMessages((currentMessages) =>
+            currentMessages.filter((message) => message.id !== optimisticId)
+          );
+        }
+        toast.error(getUploadErrorMessage(error));
+      } finally {
+        setIsSendingMessage(false);
+      }
+    },
+    [chatEnabled, isSendingMessage, selectedPaper]
+  );
+
+  const handleClearMessages = useCallback(async () => {
+    if (!selectedPaper || isClearingMessages || messages.length === 0) return;
+
+    const confirmed = window.confirm("Clear chat history for this paper?");
+    if (!confirmed) return;
+
+    const paperId = selectedPaper.id;
+    setIsClearingMessages(true);
+
+    const supabase = getBrowserSupabaseClient();
+    const { error } = await supabase
+      .from("paper_messages")
+      .delete()
+      .eq("paper_id", paperId)
+      .eq("owner_id", userId);
+
+    setIsClearingMessages(false);
+
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+
+    if (selectedPaperIdRef.current === paperId) {
+      setMessages([]);
+    }
+    toast.success("Chat cleared");
+  }, [isClearingMessages, messages.length, selectedPaper, userId]);
+
   const handleDeletePaper = async (paperId: string) => {
     const paper = papers.find((currentPaper) => currentPaper.id === paperId);
     if (!paper || deletingPaperId) return;
@@ -353,9 +482,14 @@ export function WorkspaceShell({
           collapsed={readMode && !assistantExpanded}
           onExpand={() => setAssistantExpanded(true)}
           messages={messages}
-          onMessagesChange={setMessages}
-          chatEnabled={false}
+          onSendMessage={handleSendMessage}
+          chatEnabled={chatEnabled}
           disabledMessage={assistantDisabledMessage}
+          isSendingMessage={isSendingMessage}
+          isLoadingMessages={isLoadingMessages}
+          isClearingMessages={isClearingMessages}
+          privacyWarning="PaperChat is in beta. Do not upload confidential documents."
+          onClearMessages={handleClearMessages}
         />
       </div>
     </div>

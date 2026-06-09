@@ -12,9 +12,14 @@ interface AssistantPanelProps {
   collapsed: boolean;
   onExpand: () => void;
   messages: Message[];
-  onMessagesChange: (messages: Message[]) => void;
+  onSendMessage: (content: string) => Promise<void> | void;
   chatEnabled: boolean;
   disabledMessage?: string;
+  isSendingMessage?: boolean;
+  isLoadingMessages?: boolean;
+  isClearingMessages?: boolean;
+  privacyWarning?: string;
+  onClearMessages?: () => Promise<void> | void;
 }
 
 export function AssistantPanel({
@@ -22,9 +27,14 @@ export function AssistantPanel({
   collapsed,
   onExpand,
   messages,
-  onMessagesChange,
+  onSendMessage,
   chatEnabled,
-  disabledMessage
+  disabledMessage,
+  isSendingMessage,
+  isLoadingMessages,
+  isClearingMessages,
+  privacyWarning,
+  onClearMessages
 }: AssistantPanelProps) {
   const panelContent = (
     <div className="flex h-full w-[360px] flex-col">
@@ -43,14 +53,22 @@ export function AssistantPanel({
         <TabsContent value="chat" className="mt-0 flex-1 overflow-hidden">
           <ChatPanel
             messages={messages}
-            onMessagesChange={onMessagesChange}
+            onSendMessage={onSendMessage}
             disabled={!chatEnabled}
             disabledMessage={disabledMessage}
+            isSending={isSendingMessage}
+            isLoading={isLoadingMessages}
+            isClearing={isClearingMessages}
+            privacyWarning={privacyWarning}
+            onClearMessages={onClearMessages}
           />
         </TabsContent>
 
         <TabsContent value="voice" className="mt-0 flex-1 overflow-hidden">
-          <VoicePanel disabled={!chatEnabled} disabledMessage={disabledMessage} />
+          <VoicePanel
+            disabled
+            disabledMessage="Voice is coming later, after paper chat settles."
+          />
         </TabsContent>
       </Tabs>
     </div>

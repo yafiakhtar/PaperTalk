@@ -1,8 +1,8 @@
 # PaperTalk
 
-PaperTalk is a research-paper workspace for uploading PDFs, reading them in a custom viewer, and eventually chatting with the paper itself.
+PaperTalk is a research-paper workspace for uploading PDFs, reading them in a custom viewer, and chatting with extracted paper text.
 
-The current V1 focus is real auth, private PDF storage, and a clean reading experience. Paper chat and voice are intentionally disabled until text extraction and Q&A are implemented properly.
+The current V1 focus is real auth, private PDF storage, PDF text extraction, and beta paper chat with page citations. Voice remains intentionally disabled until chat settles.
 
 ## Stack
 
@@ -12,6 +12,7 @@ The current V1 focus is real auth, private PDF storage, and a clean reading expe
 - next-themes (system / light / dark)
 - Supabase Auth, Postgres, and private Storage
 - PDF.js via `pdfjs-dist`
+- OpenRouter / Nemotron for beta paper chat
 
 ## Implemented
 
@@ -36,11 +37,23 @@ The current V1 focus is real auth, private PDF storage, and a clean reading expe
   - Current page tracking
   - Text selection layer
   - Normalized copy/paste for selected PDF text
+- PDF text extraction
+  - Automatic extraction after upload
+  - Page-level text storage
+  - Chunk storage for retrieval and citations
+  - Clear failed state for scanned/image-only PDFs
+- Beta PaperChat
+  - Enabled after extraction completes
+  - Keyword-ranked chunk retrieval
+  - OpenRouter Nemotron responses
+  - Backend-owned page/chunk citations
+  - Persisted per-paper chat history
+  - Privacy warning for non-confidential documents
 - Workspace shell
   - Sidebar paper library
   - Empty state upload affordance
   - Close paper without deleting it
-  - Chat and voice panels disabled with honest "coming next" copy
+  - Voice panel disabled with honest "coming later" copy
 
 ## Run locally
 
@@ -60,9 +73,14 @@ NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
+OPENROUTER_API_KEY=
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+OPENROUTER_MODEL=nvidia/nemotron-3-nano-30b-a3b:free
 ```
 
 `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` is preferred. `NEXT_PUBLIC_SUPABASE_ANON_KEY` is still supported as a fallback.
+
+PaperChat uses OpenRouter's free Nemotron route. Treat it as beta: do not upload confidential documents because prompts may be logged or used by the provider.
 
 ## Supabase
 
@@ -71,7 +89,8 @@ The app expects the migrations in `supabase/migrations` to be applied:
 - `profiles` table with unique usernames
 - private `papers` Storage bucket
 - `papers` table
-- RLS policies for owner-only profile and paper access
+- `paper_pages`, `paper_chunks`, and `paper_messages`
+- RLS policies for owner-only profile, paper, extraction, and chat access
 
 After linking the Supabase project, apply migrations with:
 
@@ -84,13 +103,12 @@ supabase db push
 1. `/` — Splash with typing animation
 2. `/auth` — Supabase auth page
 3. `/auth/callback` — Email confirmation and recovery callback
-4. `/app` — Protected workspace with sidebar, PDF viewer, and disabled assistant panels
+4. `/app` — Protected workspace with sidebar, PDF viewer, text extraction, and beta paper chat
 
 ## Coming up
 
-- Text extraction from uploaded PDFs
-- Paper-aware chat with citations
 - Embeddings/retrieval for larger documents
-- Voice input/output once chat is real
+- Clickable citations that scroll the PDF
+- Voice input/output once chat is stable
 - Google sign-in after Supabase and Google provider setup
 - More PDF viewer polish only where it supports reading or citations
