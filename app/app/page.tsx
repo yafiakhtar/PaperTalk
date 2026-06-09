@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { WorkspaceShell } from "@/components/layout/workspace-shell";
 import { getServerSupabaseClient } from "@/lib/supabase/server";
-import type { Paper } from "@/lib/papers";
+import { PAPER_SELECT, type Paper } from "@/lib/papers";
 
 export default async function AppPage() {
   const supabase = await getServerSupabaseClient();
@@ -21,7 +21,7 @@ export default async function AppPage() {
 
   const { data: papers } = await supabase
     .from("papers")
-    .select("id,title,storage_path,file_size,mime_type,status,created_at,updated_at")
+    .select(PAPER_SELECT)
     .eq("owner_id", user.id)
     .order("created_at", { ascending: false });
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AssistantPanel } from "@/components/assistant/assistant-panel";
 import { TopNav } from "@/components/layout/top-nav";
@@ -11,6 +11,7 @@ import { UploadOverlay } from "@/components/paper/upload-overlay";
 import { getBrowserSupabaseClient } from "@/lib/supabase/client";
 import {
   MAX_PDF_SIZE_BYTES,
+  PAPER_SELECT,
   PAPERS_BUCKET,
   PDF_MIME_TYPE,
   getPaperStoragePath,
@@ -24,9 +25,14 @@ const INITIAL_MESSAGES: Message[] = [
   {
     id: "paper-chat-next",
     role: "assistant",
-    content: "Upload and view PDFs here. Paper chat is coming in the next stage."
+    content: "Upload a PDF to extract its text. Paper chat is coming in the next stage."
   }
 ];
+
+interface ExtractPaperResponse {
+  paper?: Paper | null;
+  error?: string;
+}
 
 interface WorkspaceShellProps {
   userId: string;
@@ -38,6 +44,30 @@ interface WorkspaceShellProps {
 function getUploadErrorMessage(error: unknown) {
   if (error instanceof Error) return error.message;
   return "Could not upload this PDF.";
+}
+
+function getAssistantDisabledMessage(selectedPaper: Paper | null) {
+  if (!selectedPaper) {
+    return "Upload a PDF to extract its text. Paper chat comes next.";
+  }
+
+  if (selectedPaper.status !== "ready") {
+    return "Finish uploading this PDF. Paper chat comes next.";
+  }
+
+  if (selectedPaper.extraction_status === "extracting") {
+    return "Extracting text from this PDF. Paper chat comes next.";
+  }
+
+  if (selectedPaper.extraction_status === "completed") {
+    return "Paper text is ready. Paper chat comes in the next stage.";
+  }
+
+  if (selectedPaper.extraction_status === "failed") {
+    return "Text extraction failed for this PDF. Paper chat needs selectable paper text.";
+  }
+
+  return "Extracting paper text comes first. Paper chat comes next.";
 }
 
 export function WorkspaceShell({
@@ -55,15 +85,15 @@ export function WorkspaceShell({
   const [isUploading, setIsUploading] = useState(false);
   const [deletingPaperId, setDeletingPaperId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES);
+  const extractingPaperIdsRef = useRef(new Set<string>());
+  const attemptedExtractionIdsRef = useRef(new Set<string>());
 
   const selectedPaper = useMemo(
     () => papers.find((paper) => paper.id === selectedPaperId) ?? null,
     [papers, selectedPaperId]
   );
 
-  const assistantDisabledMessage = selectedPaper
-    ? "Paper chat is coming in the next stage."
-    : "Upload a PDF to view it. Paper chat comes next.";
+  const assistantDisabledMessage = getAssistantDisabledMessage(selectedPaper);
 
   const handleReadModeChange = (value: boolean) => {
     setReadMode(value);
@@ -83,6 +113,84 @@ export function WorkspaceShell({
       return nextPapers;
     });
   };
+
+  const replacePaperLocally = useCallback((updatedPaper: Paper) => {
+    setPapers((currentPapers) =>
+      currentPapers.map((paper) =>
+        paper.id === updatedPaper.id ? updatedPaper : paper
+      )
+    );
+  }, []);
+
+  const startExtraction = useCallback(
+    async (paperId: string) => {
+      if (extractingPaperIdsRef.current.has(paperId)) return;
+
+      const paperToExtract = papers.find((paper) => paper.id === paperId);
+      if (
+        !paperToExtract ||
+        paperToExtract.status !== "ready" ||
+        (paperToExtract.extraction_status !== "pending" &&
+          paperToExtract.extraction_status !== "failed")
+      ) {
+        return;
+      }
+
+      extractingPaperIdsRef.current.add(paperId);
+      attemptedExtractionIdsRef.current.add(paperId);
+      setPapers((currentPapers) =>
+        currentPapers.map((paper) =>
+          paper.id === paperId
+            ? {
+                ...paper,
+                extraction_status: "extracting",
+                extraction_error: null,
+                extracted_at: null,
+                page_count: null
+              }
+            : paper
+        )
+      );
+
+      try {
+        const response = await fetch(`/api/papers/${paperId}/extract`, {
+          method: "POST"
+        });
+        const body = (await response
+          .json()
+          .catch(() => ({}))) as ExtractPaperResponse;
+
+        if (body.paper) {
+          replacePaperLocally(body.paper);
+        }
+
+        if (!response.ok) {
+          throw new Error(body.error || "Could not extract text from this PDF.");
+        }
+      } catch (error) {
+        toast.error(getUploadErrorMessage(error));
+      } finally {
+        extractingPaperIdsRef.current.delete(paperId);
+      }
+    },
+    [papers, replacePaperLocally]
+  );
+
+  useEffect(() => {
+    if (
+      selectedPaper?.status === "ready" &&
+      (selectedPaper.extraction_status === "pending" ||
+        (selectedPaper.extraction_status === "failed" &&
+          !attemptedExtractionIdsRef.current.has(selectedPaper.id)))
+    ) {
+      void startExtraction(selectedPaper.id);
+    }
+  }, [
+    selectedPaper?.id,
+    selectedPaper?.status,
+    selectedPaper?.extraction_status,
+    startExtraction
+  ]);
 
   const handleUpload = async (file: File) => {
     if (isUploading) return;
@@ -109,6 +217,10 @@ export function WorkspaceShell({
       file_size: file.size,
       mime_type: PDF_MIME_TYPE,
       status: "uploading",
+      extraction_status: "pending",
+      extraction_error: null,
+      extracted_at: null,
+      page_count: null,
       created_at: timestamp,
       updated_at: timestamp
     };
@@ -125,7 +237,8 @@ export function WorkspaceShell({
         storage_path: storagePath,
         file_size: file.size,
         mime_type: PDF_MIME_TYPE,
-        status: "uploading"
+        status: "uploading",
+        extraction_status: "pending"
       });
 
       if (insertError) throw insertError;
@@ -144,7 +257,7 @@ export function WorkspaceShell({
         .from("papers")
         .update({ status: "ready" })
         .eq("id", paperId)
-        .select("id,title,storage_path,file_size,mime_type,status,created_at,updated_at")
+        .select(PAPER_SELECT)
         .single();
 
       if (updateError) throw updateError;
@@ -153,6 +266,7 @@ export function WorkspaceShell({
         currentPapers.map((paper) => (paper.id === paperId ? (readyPaper as Paper) : paper))
       );
       toast.success("PDF uploaded");
+      void startExtraction(paperId);
     } catch (error) {
       await supabase.storage.from(PAPERS_BUCKET).remove([storagePath]);
       await supabase.from("papers").delete().eq("id", paperId);

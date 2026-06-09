@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { PAPERS_BUCKET, formatFileSize, type Paper } from "@/lib/papers";
+import { PAPERS_BUCKET, getPaperMetadataLabel, type Paper } from "@/lib/papers";
 import { getBrowserSupabaseClient } from "@/lib/supabase/client";
 import type {
   PDFDocumentLoadingTask,
@@ -511,9 +511,7 @@ export function PdfViewer({ paper, onClose }: PdfViewerProps) {
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium">{paper.title}</p>
           <p className="mt-0.5 truncate text-xs text-muted-foreground">
-            {paper.status === "ready"
-              ? `PDF | ${formatFileSize(paper.file_size)}`
-              : "Finalizing upload..."}
+            {getPaperMetadataLabel(paper)}
           </p>
         </div>
 

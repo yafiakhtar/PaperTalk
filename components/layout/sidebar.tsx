@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { UploadButton } from "@/components/paper/upload-button";
-import { formatFileSize, type Paper } from "@/lib/papers";
+import { getPaperMetadataLabel, type Paper } from "@/lib/papers";
 import { getBrowserSupabaseClient } from "@/lib/supabase/client";
 
 interface SidebarProps {
@@ -329,7 +329,7 @@ function PaperItem({
       >
         <span className="line-clamp-2">{paper.title}</span>
         <span className="mt-0.5 block text-xs text-muted-foreground">
-          {paper.status === "ready" ? formatFileSize(paper.file_size) : "Uploading..."}
+          {getPaperMetadataLabel(paper)}
         </span>
       </button>
       <Button
