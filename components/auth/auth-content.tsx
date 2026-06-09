@@ -426,10 +426,19 @@ function AuthFrame({
   errorMessage?: string | null;
   noticeMessage?: string | null;
 }) {
+  const isBrandTitle = title === "PaperTalk";
+
   return (
     <div className={cn("w-full max-w-sm space-y-6", className)}>
       <div className="space-y-1 text-center">
-        <h1 className="text-xl font-medium tracking-tight">{title}</h1>
+        <h1
+          className={cn(
+            "tracking-normal",
+            isBrandTitle ? "font-brand text-2xl" : "text-xl font-medium"
+          )}
+        >
+          {title}
+        </h1>
         <p className="text-sm text-muted-foreground">{subtitle}</p>
       </div>
 

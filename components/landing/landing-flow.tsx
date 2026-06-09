@@ -46,7 +46,17 @@ export function LandingFlow({
         )}
         style={{ transitionDuration: `${FADE_DURATION_MS}ms` }}
       >
-        <TypingText text="Welcome to PaperTalk" speed={95} onComplete={handleTypingComplete} />
+        <div className="flex flex-col items-center gap-3 text-center">
+          <TypingText
+            text="PaperTalk"
+            speed={95}
+            onComplete={handleTypingComplete}
+            className="font-brand text-5xl font-normal leading-none tracking-normal md:text-6xl"
+          />
+          <p className="text-base text-muted-foreground md:text-lg">
+            Read, understand, and discuss research papers.
+          </p>
+        </div>
       </div>
 
       <div

@@ -13,7 +13,7 @@ interface TopNavProps {
 export function TopNav({ readMode, onReadModeChange }: TopNavProps) {
   return (
     <header className="flex h-12 shrink-0 items-center justify-between border-b border-border px-4">
-      <Link href="/app" className="text-sm font-medium tracking-tight">
+      <Link href="/app" className="font-brand text-xl leading-none tracking-normal">
         PaperTalk
       </Link>
 

@@ -10,6 +10,26 @@ interface TypingTextProps {
   className?: string;
 }
 
+const BRAND_WORD = "PaperTalk";
+
+function renderDisplayedText(displayed: string, fullText: string) {
+  const brandStart = fullText.indexOf(BRAND_WORD);
+  if (brandStart === -1 || displayed.length <= brandStart) return displayed;
+
+  const brandEnd = brandStart + BRAND_WORD.length;
+  const prefix = displayed.slice(0, brandStart);
+  const brand = displayed.slice(brandStart, Math.min(displayed.length, brandEnd));
+  const suffix = displayed.slice(brandEnd);
+
+  return (
+    <>
+      {prefix}
+      <span className="font-brand font-normal">{brand}</span>
+      {suffix}
+    </>
+  );
+}
+
 export function TypingText({ text, speed = 95, onComplete, className }: TypingTextProps) {
   const [displayed, setDisplayed] = useState("");
   const [done, setDone] = useState(false);
@@ -31,9 +51,14 @@ export function TypingText({ text, speed = 95, onComplete, className }: TypingTe
   }, [text, speed, onComplete]);
 
   return (
-    <p className={cn("text-2xl font-medium tracking-tight md:text-3xl", className)}>
-      {displayed}
-      {!done && <span className="ml-0.5 inline-block w-[2px] animate-pulse bg-foreground">|</span>}
+    <p className={cn("text-2xl font-medium tracking-normal md:text-3xl", className)}>
+      {renderDisplayedText(displayed, text)}
+      {!done && (
+        <span
+          className="ml-1 inline-block h-[0.8em] w-[2px] animate-pulse bg-foreground align-baseline"
+          aria-hidden="true"
+        />
+      )}
     </p>
   );
 }
