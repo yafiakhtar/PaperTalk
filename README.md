@@ -12,7 +12,7 @@ The current V1 focus is real auth, private PDF storage, PDF text extraction, and
 - next-themes (system / light / dark)
 - Supabase Auth, Postgres, and private Storage
 - PDF.js via `pdfjs-dist`
-- OpenRouter / Nemotron for beta paper chat
+- Gemini API / Gemini Flash for beta paper chat
 
 ## Implemented
 
@@ -45,7 +45,7 @@ The current V1 focus is real auth, private PDF storage, PDF text extraction, and
 - Beta PaperChat
   - Enabled after extraction completes
   - Keyword-ranked chunk retrieval
-  - OpenRouter Nemotron responses
+  - Gemini Flash responses
   - Backend-owned page/chunk citations
   - Persisted per-paper chat history
   - Privacy warning for non-confidential documents
@@ -73,14 +73,13 @@ NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
-OPENROUTER_API_KEY=
-OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
-OPENROUTER_MODEL=nvidia/nemotron-3-nano-30b-a3b:free
+GEMINI_API_KEY=
+GEMINI_CHAT_MODEL=gemini-2.5-flash
 ```
 
 `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` is preferred. `NEXT_PUBLIC_SUPABASE_ANON_KEY` is still supported as a fallback.
 
-PaperChat uses OpenRouter's free Nemotron route. Treat it as beta: do not upload confidential documents because prompts may be logged or used by the provider.
+PaperChat uses the Gemini API free tier. Treat it as beta: do not upload confidential documents because prompts may be logged or used by the provider.
 
 ## Supabase
 

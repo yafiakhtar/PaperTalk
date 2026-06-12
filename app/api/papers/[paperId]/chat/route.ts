@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createOpenRouterChatCompletion } from "@/lib/openrouter.server";
+import { createGeminiChatCompletion } from "@/lib/gemini.server";
 import { PAPER_SELECT, type Paper } from "@/lib/papers";
 import {
   selectRelevantChunks,
@@ -231,12 +231,12 @@ export async function POST(request: Request, context: RouteContext) {
     const answer =
       selectedChunks.length === 0
         ? cleanModelAnswer(
-            await createOpenRouterChatCompletion(
+            await createGeminiChatCompletion(
               buildModelMessages(paper, question, [], recentMessages)
             )
           )
         : cleanModelAnswer(
-            await createOpenRouterChatCompletion(
+            await createGeminiChatCompletion(
               buildModelMessages(paper, question, selectedChunks, recentMessages)
             )
           );
