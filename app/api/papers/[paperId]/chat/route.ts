@@ -26,6 +26,11 @@ interface PaperWithOwner extends Paper {
   owner_id: string;
 }
 
+interface ContextSource {
+  label: string;
+  chunk: PaperChunkForRetrieval;
+}
+
 function getShortErrorMessage(error: unknown) {
   const message = error instanceof Error ? error.message : "Could not answer this question.";
   return message.length > 240 ? `${message.slice(0, 237)}...` : message;
@@ -52,31 +57,22 @@ function isGeneralAssistantMessage(question: string) {
   );
 }
 
-function uniqueCitations(chunks: PaperChunkForRetrieval[]): MessageCitation[] {
-  const seen = new Set<string>();
-  const citations: MessageCitation[] = [];
-
-  chunks.forEach((chunk) => {
-    if (seen.has(chunk.id)) return;
-    seen.add(chunk.id);
-    citations.push({
-      page: chunk.page_number,
-      chunkId: chunk.id
-    });
-  });
-
-  return citations;
+function buildContextSources(chunks: PaperChunkForRetrieval[]) {
+  return chunks.map((chunk, index) => ({
+    label: `S${index + 1}`,
+    chunk
+  }));
 }
 
-function formatContext(chunks: PaperChunkForRetrieval[]) {
-  if (chunks.length === 0) {
+function formatContext(sources: ContextSource[]) {
+  if (sources.length === 0) {
     return "No relevant paper excerpts were found for this message.";
   }
 
-  return chunks
+  return sources
     .map(
-      (chunk, index) =>
-        `[Source ${index + 1} | Page ${chunk.page_number}]\n${chunk.text.trim()}`
+      (source) =>
+        `[${source.label} | Page ${source.chunk.page_number}]\n${source.chunk.text.trim()}`
     )
     .join("\n\n---\n\n");
 }
@@ -94,10 +90,113 @@ function cleanModelAnswer(answer: string) {
     .trim();
 }
 
+function getValidSourceIndexes(value: string, sourceCount: number) {
+  const sourceIndexes: number[] = [];
+  const sourcePattern = /\b(?:s|source)\s*(\d+)\b/gi;
+  let match: RegExpExecArray | null;
+
+  while ((match = sourcePattern.exec(value)) !== null) {
+    const sourceIndex = Number(match[1]) - 1;
+    if (
+      Number.isInteger(sourceIndex) &&
+      sourceIndex >= 0 &&
+      sourceIndex < sourceCount &&
+      !sourceIndexes.includes(sourceIndex)
+    ) {
+      sourceIndexes.push(sourceIndex);
+    }
+  }
+
+  return sourceIndexes;
+}
+
+function formatPageMarker(sourceIndexes: number[], sources: ContextSource[]) {
+  const pages = Array.from(
+    new Set(sourceIndexes.map((sourceIndex) => sources[sourceIndex]?.chunk.page_number))
+  )
+    .filter((page): page is number => Number.isInteger(page) && page > 0)
+    .sort((a, b) => a - b);
+
+  if (pages.length === 0) return "";
+  if (pages.length === 1) return `[Page ${pages[0]}]`;
+  return `[Pages ${pages.join(", ")}]`;
+}
+
+function buildCitationsFromSourceIndexes(
+  sourceIndexes: number[],
+  sources: ContextSource[]
+) {
+  const seenChunkIds = new Set<string>();
+  const citations: MessageCitation[] = [];
+
+  sourceIndexes.forEach((sourceIndex) => {
+    const chunk = sources[sourceIndex]?.chunk;
+    if (!chunk || seenChunkIds.has(chunk.id)) return;
+
+    seenChunkIds.add(chunk.id);
+    citations.push({
+      page: chunk.page_number,
+      chunkId: chunk.id
+    });
+  });
+
+  return citations;
+}
+
+function buildCitationsFromPageMarkers(answer: string, sources: ContextSource[]) {
+  const seenPages = new Set<number>();
+  const pagePattern = /\[Pages?\s+([0-9,\s]+)\]/gi;
+  let match: RegExpExecArray | null;
+
+  while ((match = pagePattern.exec(answer)) !== null) {
+    const pageNumbers = match[1]
+      .split(",")
+      .map((value) => Number(value.trim()))
+      .filter((page) => Number.isInteger(page) && page > 0);
+
+    pageNumbers.forEach((page) => seenPages.add(page));
+  }
+
+  return Array.from(seenPages)
+    .sort((a, b) => a - b)
+    .map((page) => sources.find((source) => source.chunk.page_number === page)?.chunk)
+    .filter((chunk): chunk is PaperChunkForRetrieval => Boolean(chunk))
+    .map((chunk) => ({
+      page: chunk.page_number,
+      chunkId: chunk.id
+    }));
+}
+
+function normalizeAnswerCitations(answer: string, sources: ContextSource[]) {
+  const citedSourceIndexes: number[] = [];
+  const seenSourceIndexes = new Set<number>();
+  const content = answer.replace(/\[([^\[\]]+)\]/g, (marker, inner: string) => {
+    const sourceIndexes = getValidSourceIndexes(inner, sources.length);
+    if (sourceIndexes.length === 0) return marker;
+
+    sourceIndexes.forEach((sourceIndex) => {
+      if (seenSourceIndexes.has(sourceIndex)) return;
+      seenSourceIndexes.add(sourceIndex);
+      citedSourceIndexes.push(sourceIndex);
+    });
+
+    return formatPageMarker(sourceIndexes, sources) || marker;
+  });
+  const sourceCitations = buildCitationsFromSourceIndexes(citedSourceIndexes, sources);
+
+  return {
+    content,
+    citations:
+      sourceCitations.length > 0
+        ? sourceCitations
+        : buildCitationsFromPageMarkers(content, sources)
+  };
+}
+
 function buildModelMessages(
   paper: PaperWithOwner,
   question: string,
-  chunks: PaperChunkForRetrieval[],
+  sources: ContextSource[],
   recentMessages: PaperMessage[]
 ) {
   const history = recentMessages.slice(-6).map((message) => ({
@@ -109,13 +208,13 @@ function buildModelMessages(
     {
       role: "system" as const,
       content:
-        "You are PaperTalk, a careful research-paper assistant inside an AI web app. For greetings, small talk, and questions about what you can do, respond naturally and briefly. For paper-specific questions, answer only from the provided paper excerpts. If no relevant excerpts are provided, say you do not see that in the available paper context and suggest a more specific paper question. Write in clean plain text: no Markdown, no bullets unless the user asks, no bold, no headings, no final citations section, and no source or chunk IDs. Keep the answer to one or two short paragraphs by default. If a page reference is useful, use a brief inline marker like [Page 3]. Do not invent citations, studies, methods, or results."
+        "You are PaperTalk, a careful research-paper assistant inside an AI web app. For greetings, small talk, and questions about what you can do, respond naturally and briefly. For paper-specific questions, answer only from the provided paper excerpts. If no relevant excerpts are provided, say you do not see that in the available paper context and suggest a more specific paper question. Cite paper-specific factual claims inline with the provided source IDs, using markers like [S1] or [S1, S3]. Use only source IDs that appear in the relevant paper excerpts. Do not cite greetings, small talk, or missing-context responses. Write in clean plain text: no Markdown, no bullets unless the user asks, no bold, no headings, and no final citations section. Keep the answer to one or two short paragraphs by default. Do not invent citations, studies, methods, or results."
     },
     ...history,
     {
       role: "user" as const,
       content: `Paper title: ${paper.title}\n\nRelevant paper excerpts:\n${formatContext(
-        chunks
+        sources
       )}\n\nQuestion: ${question}`
     }
   ];
@@ -211,7 +310,7 @@ export async function POST(request: Request, context: RouteContext) {
   const selectedChunks = shouldUsePaperContext
     ? selectRelevantChunks(question, chunks)
     : [];
-  const citations = uniqueCitations(selectedChunks);
+  const contextSources = buildContextSources(selectedChunks);
 
   try {
     const { data: historyRows, error: historyError } = await supabase
@@ -228,18 +327,12 @@ export async function POST(request: Request, context: RouteContext) {
       .map(normalizeMessage)
       .reverse();
 
-    const answer =
-      selectedChunks.length === 0
-        ? cleanModelAnswer(
-            await createGeminiChatCompletion(
-              buildModelMessages(paper, question, [], recentMessages)
-            )
-          )
-        : cleanModelAnswer(
-            await createGeminiChatCompletion(
-              buildModelMessages(paper, question, selectedChunks, recentMessages)
-            )
-          );
+    const cleanedAnswer = cleanModelAnswer(
+      await createGeminiChatCompletion(
+        buildModelMessages(paper, question, contextSources, recentMessages)
+      )
+    );
+    const answer = normalizeAnswerCitations(cleanedAnswer, contextSources);
 
     const userMessage = await insertMessage(supabase, paperId, user.id, "user", question);
     const assistantMessage = await insertMessage(
@@ -247,8 +340,8 @@ export async function POST(request: Request, context: RouteContext) {
       paperId,
       user.id,
       "assistant",
-      answer,
-      citations
+      answer.content,
+      answer.citations
     );
 
     return NextResponse.json({ userMessage, assistantMessage });
