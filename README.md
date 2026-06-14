@@ -44,7 +44,7 @@ The current V1 focus is real auth, private PDF storage, PDF text extraction, and
   - Clear failed state for scanned/image-only PDFs
 - Beta PaperChat
   - Enabled after extraction completes
-  - Keyword-ranked chunk retrieval
+  - Gemini embedding-powered vector retrieval with keyword fallback
   - Gemini Flash responses
   - Backend-owned page/chunk citations
   - Persisted per-paper chat history
@@ -75,6 +75,8 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
 GEMINI_API_KEY=
 GEMINI_CHAT_MODEL=gemini-2.5-flash
+GEMINI_EMBEDDING_MODEL=gemini-embedding-2
+GEMINI_EMBEDDING_DIMENSIONS=768
 ```
 
 `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` is preferred. `NEXT_PUBLIC_SUPABASE_ANON_KEY` is still supported as a fallback.
@@ -88,7 +90,7 @@ The app expects the migrations in `supabase/migrations` to be applied:
 - `profiles` table with unique usernames
 - private `papers` Storage bucket
 - `papers` table
-- `paper_pages`, `paper_chunks`, and `paper_messages`
+- `paper_pages`, `paper_chunks` with pgvector embeddings, and `paper_messages`
 - RLS policies for owner-only profile, paper, extraction, and chat access
 
 After linking the Supabase project, apply migrations with:
@@ -106,7 +108,7 @@ supabase db push
 
 ## Coming up
 
-- Embeddings/retrieval for larger documents
+- Embedding backfill for already-extracted papers
 - Clickable citations that scroll the PDF
 - Voice input/output once chat is stable
 - Google sign-in after Supabase and Google provider setup

@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
+import {
+  createGeminiEmbedding,
+  formatGeminiRetrievalDocument
+} from "@/lib/gemini.server";
 import { extractPdfText } from "@/lib/paper-extraction.server";
+import type { ExtractedChunk } from "@/lib/paper-extraction.server";
 import { PAPER_SELECT, PAPERS_BUCKET, type Paper } from "@/lib/papers";
 import { getServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -16,6 +21,8 @@ interface PaperWithOwner extends Paper {
   owner_id: string;
 }
 
+const EMBEDDING_BATCH_SIZE = 4;
+
 function withoutOwnerId(paper: PaperWithOwner): Paper {
   const { owner_id: _ownerId, ...paperWithoutOwner } = paper;
   return paperWithoutOwner;
@@ -26,6 +33,70 @@ function getShortErrorMessage(error: unknown) {
     error instanceof Error ? error.message : "Could not extract text from this PDF.";
 
   return message.length > 240 ? `${message.slice(0, 237)}...` : message;
+}
+
+function getWarningMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Unknown error";
+}
+
+async function buildChunkRows(
+  paper: PaperWithOwner,
+  paperId: string,
+  ownerId: string,
+  chunks: ExtractedChunk[]
+) {
+  const rows: Record<string, unknown>[] = [];
+  let shouldAttemptEmbeddings = true;
+  let hasLoggedEmbeddingError = false;
+
+  for (let index = 0; index < chunks.length; index += EMBEDDING_BATCH_SIZE) {
+    const batch = chunks.slice(index, index + EMBEDDING_BATCH_SIZE);
+    const embeddings = shouldAttemptEmbeddings
+      ? await Promise.all(
+          batch.map(async (chunk) => {
+            try {
+              return await createGeminiEmbedding(
+                formatGeminiRetrievalDocument(paper.title, chunk.text)
+              );
+            } catch (error) {
+              shouldAttemptEmbeddings = false;
+
+              if (!hasLoggedEmbeddingError) {
+                console.warn(
+                  `Paper chunk embedding failed; continuing with keyword fallback. ${getWarningMessage(
+                    error
+                  )}`
+                );
+                hasLoggedEmbeddingError = true;
+              }
+
+              return null;
+            }
+          })
+        )
+      : batch.map(() => null);
+
+    batch.forEach((chunk, batchIndex) => {
+      const row: Record<string, unknown> = {
+        paper_id: paperId,
+        owner_id: ownerId,
+        page_number: chunk.page_number,
+        chunk_index: chunk.chunk_index,
+        text: chunk.text,
+        start_char: chunk.start_char,
+        end_char: chunk.end_char
+      };
+
+      const embedding = embeddings[batchIndex];
+      if (embedding) {
+        row.embedding = embedding;
+      }
+
+      rows.push(row);
+    });
+  }
+
+  return rows;
 }
 
 async function markExtractionFailed(
@@ -195,15 +266,7 @@ export async function POST(_request: Request, context: RouteContext) {
     await insertRowsInBatches(
       supabase,
       "paper_chunks",
-      extracted.chunks.map((chunk) => ({
-        paper_id: paperId,
-        owner_id: user.id,
-        page_number: chunk.page_number,
-        chunk_index: chunk.chunk_index,
-        text: chunk.text,
-        start_char: chunk.start_char,
-        end_char: chunk.end_char
-      }))
+      await buildChunkRows(paper, paperId, user.id, extracted.chunks)
     );
 
     const { data: updatedPaper, error: updateError } = await supabase

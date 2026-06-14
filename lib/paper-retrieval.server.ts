@@ -6,7 +6,7 @@ export interface PaperChunkForRetrieval {
 }
 
 const MAX_CONTEXT_CHARS = 10000;
-const MAX_CONTEXT_CHUNKS = 8;
+export const MAX_CONTEXT_CHUNKS = 8;
 
 const STOP_WORDS = new Set([
   "about",
@@ -59,7 +59,7 @@ function tokenize(value: string) {
     ?.filter((token) => !STOP_WORDS.has(token)) ?? [];
 }
 
-function isBroadPaperQuestion(question: string) {
+export function isBroadPaperQuestion(question: string) {
   const normalizedQuestion = question.toLowerCase().replace(/\s+/g, " ").trim();
 
   return (
@@ -71,6 +71,80 @@ function isBroadPaperQuestion(question: string) {
     /\bwho (wrote|authored) (this |the )?paper\b/i.test(normalizedQuestion) ||
     /\b(authors?|title) of (this |the )?paper\b/i.test(normalizedQuestion)
   );
+}
+
+export function isLearningGuidanceQuestion(question: string) {
+  const normalizedQuestion = question
+    .toLowerCase()
+    .replace(/[^\w\s']/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return (
+    /\b(beginner|beginners|new to|starting out|just starting|getting into|get into|first paper|starting point|good (paper|way|place)|worth reading|should i read|prerequisites?|background needed|prior knowledge|reading strategy|reading plan)\b/i.test(
+      normalizedQuestion
+    ) ||
+    /\bhow should i (approach|read|study|learn)\b/i.test(normalizedQuestion) ||
+    /\bis (this|the) paper (hard|difficult|challenging|too advanced)\b/i.test(
+      normalizedQuestion
+    ) ||
+    /\b(starting|started|new)\b.*\b(ml|ai|machine learning|artificial intelligence|paper|field)\b/i.test(
+      normalizedQuestion
+    )
+  );
+}
+
+export function isPaperHelpRequest(question: string) {
+  const normalizedQuestion = question
+    .toLowerCase()
+    .replace(/[^\w\s']/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return (
+    /\b(i\s+have|i\s+had|got|have)\s+(a\s+couple\s+of\s+)?(doubts?|questions?|confusion)\b/i.test(
+      normalizedQuestion
+    ) ||
+    /\b(i'?m|i am)\s+(confused|stuck|lost)\b/i.test(normalizedQuestion) ||
+    /\b(don'?t|do not)\s+understand\b/i.test(normalizedQuestion) ||
+    /\bhelp me understand\b/i.test(normalizedQuestion) ||
+    /\b(can you|could you)\s+(explain|walk me through|help)\b/i.test(
+      normalizedQuestion
+    ) ||
+    /\b(can|could)\s+i\s+(go over|ask|talk through|discuss|walk through)\b/i.test(
+      normalizedQuestion
+    ) ||
+    /\b(can|could)\s+we\s+(go over|talk through|discuss|walk through)\b/i.test(
+      normalizedQuestion
+    ) ||
+    /\bgo over (them|this|it) with you\b/i.test(normalizedQuestion) ||
+    /\bquestions? about .*\b(can|could)\s+i\b/i.test(normalizedQuestion) ||
+    /\b(section|part|chapter|paragraph|training|attention|optimizer|architecture|loss function|method)\s+(is|was|feels?)\s+(confusing|hard|difficult|unclear)\b/i.test(
+      normalizedQuestion
+    )
+  );
+}
+
+export function selectOpeningChunks(
+  chunks: PaperChunkForRetrieval[],
+  maxChunks = MAX_CONTEXT_CHUNKS
+) {
+  return capChunks(chunks.slice(0, maxChunks), maxChunks);
+}
+
+export function selectCombinedChunks(
+  chunkGroups: PaperChunkForRetrieval[][],
+  maxChunks = MAX_CONTEXT_CHUNKS
+) {
+  const uniqueChunks = new Map<string, PaperChunkForRetrieval>();
+
+  chunkGroups.flat().forEach((chunk) => {
+    if (!uniqueChunks.has(chunk.id)) {
+      uniqueChunks.set(chunk.id, chunk);
+    }
+  });
+
+  return capChunks(Array.from(uniqueChunks.values()), maxChunks);
 }
 
 function countOccurrences(text: string, term: string) {
@@ -100,12 +174,12 @@ function scoreChunk(chunk: PaperChunkForRetrieval, terms: string[]) {
   return score;
 }
 
-function capChunks(chunks: PaperChunkForRetrieval[]) {
+function capChunks(chunks: PaperChunkForRetrieval[], maxChunks = MAX_CONTEXT_CHUNKS) {
   const selected: PaperChunkForRetrieval[] = [];
   let charCount = 0;
 
   for (const chunk of chunks) {
-    if (selected.length >= MAX_CONTEXT_CHUNKS) break;
+    if (selected.length >= maxChunks) break;
     if (charCount > 0 && charCount + chunk.text.length > MAX_CONTEXT_CHARS) break;
 
     selected.push(chunk);
@@ -117,12 +191,13 @@ function capChunks(chunks: PaperChunkForRetrieval[]) {
 
 export function selectRelevantChunks(
   question: string,
-  chunks: PaperChunkForRetrieval[]
+  chunks: PaperChunkForRetrieval[],
+  maxChunks = MAX_CONTEXT_CHUNKS
 ) {
   const terms = tokenize(question);
 
   if (isBroadPaperQuestion(question)) {
-    return capChunks(chunks.slice(0, MAX_CONTEXT_CHUNKS));
+    return selectOpeningChunks(chunks, maxChunks);
   }
 
   if (terms.length === 0) {
@@ -138,5 +213,5 @@ export function selectRelevantChunks(
     .sort((a, b) => b.score - a.score || a.chunk.page_number - b.chunk.page_number)
     .map(({ chunk }) => chunk);
 
-  return capChunks(rankedChunks);
+  return capChunks(rankedChunks, maxChunks);
 }
