@@ -125,6 +125,41 @@ export function isPaperHelpRequest(question: string) {
   );
 }
 
+export function isBackgroundConceptQuestion(question: string) {
+  if (isBroadPaperQuestion(question)) {
+    return false;
+  }
+
+  const normalizedQuestion = question
+    .toLowerCase()
+    .replace(/[^\w\s']/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const asksExplicitMeaning =
+    /\bwhat\s+(?:does|do)\s+.+\s+mean\b/i.test(normalizedQuestion) ||
+    /\bwhat\s+(?:does|do)\s+.+\s+stand\s+for\b/i.test(normalizedQuestion) ||
+    /\bwhat\s+.+\s+means?\b/i.test(normalizedQuestion) ||
+    /\bdefine\s+.+\b/i.test(normalizedQuestion);
+
+  const asksConceptDefinition =
+    /\bwhat\s+(?:exactly\s+)?(?:is|are)\s+.+\b/i.test(normalizedQuestion) ||
+    /\bwhat'?s\s+.+\b/i.test(normalizedQuestion) ||
+    /\bexplain\s+.+\b/i.test(normalizedQuestion) ||
+    asksExplicitMeaning;
+
+  const asksPaperFact =
+    /\b(what|which|how|why)\b.*\b(use|used|introduce|introduced|propose|proposed|show|shown|report|reported|train on|trained on|evaluate|evaluated|compare|compared|achieve|achieved)\b/i.test(
+      normalizedQuestion
+    ) ||
+    /\b(the|this)?\s*paper\s+(say|says|state|states|claim|claims|use|uses|used|introduce|introduced|propose|proposed|show|shows|report|reports|evaluate|evaluates)\b/i.test(
+      normalizedQuestion
+    ) ||
+    /\baccording to (this |the )?paper\b/i.test(normalizedQuestion);
+
+  return asksConceptDefinition && (!asksPaperFact || asksExplicitMeaning);
+}
+
 export function selectOpeningChunks(
   chunks: PaperChunkForRetrieval[],
   maxChunks = MAX_CONTEXT_CHUNKS

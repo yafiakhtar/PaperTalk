@@ -7,6 +7,7 @@ import {
 import { PAPER_SELECT, type Paper } from "@/lib/papers";
 import {
   MAX_CONTEXT_CHUNKS,
+  isBackgroundConceptQuestion,
   isBroadPaperQuestion,
   isLearningGuidanceQuestion,
   isPaperHelpRequest,
@@ -43,7 +44,12 @@ interface ContextSource {
 
 type ServerSupabaseClient = Awaited<ReturnType<typeof getServerSupabaseClient>>;
 
-type QuestionMode = "general" | "tutor_confusion" | "learning_guidance" | "paper_fact";
+type QuestionMode =
+  | "general"
+  | "tutor_confusion"
+  | "background_explanation"
+  | "learning_guidance"
+  | "paper_fact";
 
 interface PaperChunkMatchRow extends PaperChunkForRetrieval {
   similarity?: number | null;
@@ -51,6 +57,7 @@ interface PaperChunkMatchRow extends PaperChunkForRetrieval {
 
 const LEARNING_GUIDANCE_OPENING_CHUNKS = 3;
 const TUTOR_CONTEXT_CHUNKS = 4;
+const BACKGROUND_CONTEXT_CHUNKS = 4;
 
 function getShortErrorMessage(error: unknown) {
   const message = error instanceof Error ? error.message : "Could not answer this question.";
@@ -85,6 +92,7 @@ function isGeneralAssistantMessage(question: string) {
 function getQuestionMode(question: string): QuestionMode {
   if (isGeneralAssistantMessage(question)) return "general";
   if (isPaperHelpRequest(question)) return "tutor_confusion";
+  if (isBackgroundConceptQuestion(question)) return "background_explanation";
   if (isLearningGuidanceQuestion(question)) return "learning_guidance";
   return "paper_fact";
 }
@@ -159,9 +167,34 @@ async function selectChunksForQuestion(
   const allChunks =
     questionMode === "learning_guidance" ||
     questionMode === "tutor_confusion" ||
+    questionMode === "background_explanation" ||
     isBroadPaperQuestion(question)
       ? await fetchAllPaperChunks(supabase, paperId, ownerId)
       : null;
+
+  if (questionMode === "background_explanation") {
+    const semanticChunks = await matchSemanticPaperChunks(
+      supabase,
+      paperId,
+      question,
+      BACKGROUND_CONTEXT_CHUNKS
+    );
+    const keywordChunks = selectRelevantChunks(
+      question,
+      allChunks ?? [],
+      BACKGROUND_CONTEXT_CHUNKS
+    );
+    const topicChunks = selectCombinedChunks(
+      [semanticChunks, keywordChunks],
+      BACKGROUND_CONTEXT_CHUNKS
+    );
+
+    if (topicChunks.length > 0) {
+      return topicChunks;
+    }
+
+    return selectOpeningChunks(allChunks ?? [], Math.min(2, BACKGROUND_CONTEXT_CHUNKS));
+  }
 
   if (questionMode === "tutor_confusion") {
     const semanticChunks = await matchSemanticPaperChunks(
@@ -384,6 +417,10 @@ function getSystemPrompt(questionMode: QuestionMode) {
 
   if (questionMode === "learning_guidance") {
     return "You are PaperTalk, a careful research-paper assistant inside an AI web app. The user is asking for learning guidance, reading strategy, prerequisites, or whether this paper is suitable for them. You may give general educational advice about how to approach the paper, but clearly distinguish that advice from what the provided excerpts show. Use the excerpts to identify what the paper is about. For paper-specific details, use brief page markers when useful, like [Page 7]. Do not mention source IDs or chunk IDs. Do not cite general study advice. If the excerpts are weak or missing, say that the available paper context is limited, but still offer cautious general reading advice when useful. Write in clean plain text: no Markdown, no bullets unless the user asks, no bold, no headings, and no final citations section. Keep the answer to one or two short paragraphs by default. Do not invent paper details.";
+  }
+
+  if (questionMode === "background_explanation") {
+    return "You are PaperTalk, a careful research-paper tutor inside an AI web app. The user is asking for background understanding of a concept or term. First state any relevant fact from the provided paper excerpts with a brief page marker when useful, like [Page 7]. Then explain the concept using stable educational background knowledge. Make it clear what comes from the paper and what is general background. Keep it beginner-friendly and connect the explanation back to why the term matters in this paper. Do not use web search. Do not mention source IDs or chunk IDs. Do not refuse just because the paper does not define the term. Do not make current, pricing, newer-paper, or post-paper claims. Write in clean plain text: no Markdown, no bullets unless the user asks, no bold, no headings, and no final citations section. Keep the answer to one or two short paragraphs by default.";
   }
 
   if (questionMode === "tutor_confusion") {
