@@ -37,6 +37,7 @@ const MAX_ZOOM = 2.5;
 const ZOOM_STEP = 0.15;
 const MAX_DEVICE_PIXEL_RATIO = 2;
 const VIEWER_HORIZONTAL_PADDING = 32;
+const SCROLL_ANCHOR_OFFSET_PX = 64;
 
 let pdfjsPromise: Promise<PdfJsModule> | null = null;
 
@@ -58,6 +59,12 @@ interface PdfPageCanvasProps {
   viewportWidth: number;
   zoom: number;
   registerPage: (pageNumber: number, element: HTMLDivElement | null) => void;
+  onPageLayoutChange: (pageNumber: number) => void;
+}
+
+interface ScrollAnchor {
+  pageNumber: number;
+  offsetRatio: number;
 }
 
 async function loadPdfjs() {
@@ -77,6 +84,10 @@ async function loadPdfjs() {
 
 function clampZoom(value: number) {
   return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Number(value.toFixed(2))));
+}
+
+function clampRatio(value: number) {
+  return Math.min(1, Math.max(0, value));
 }
 
 function isCanceledRender(error: unknown) {
@@ -136,7 +147,8 @@ function PdfPageCanvas({
   pageNumber,
   viewportWidth,
   zoom,
-  registerPage
+  registerPage,
+  onPageLayoutChange
 }: PdfPageCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const textLayerRef = useRef<HTMLDivElement>(null);
@@ -231,6 +243,11 @@ function PdfPageCanvas({
     };
   }, [document, pageNumber, viewportWidth, zoom]);
 
+  useEffect(() => {
+    if (!pageSize) return;
+    onPageLayoutChange(pageNumber);
+  }, [onPageLayoutChange, pageNumber, pageSize]);
+
   const placeholderHeight = pageSize?.height ?? 420;
 
   return (
@@ -282,6 +299,8 @@ export function PdfViewer({ paper, onClose }: PdfViewerProps) {
   const pdfDocumentRef = useRef<PDFDocumentProxy | null>(null);
   const loadingTaskRef = useRef<PDFDocumentLoadingTask | null>(null);
   const pageElementsRef = useRef(new Map<number, HTMLDivElement>());
+  const pendingZoomAnchorRef = useRef<ScrollAnchor | null>(null);
+  const zoomRestoreFrameRef = useRef<number | null>(null);
   const [pdfDocument, setPdfDocument] = useState<PDFDocumentProxy | null>(null);
   const [loadState, setLoadState] = useState<LoadState>(
     paper.status === "ready" ? "loading" : "finalizing"
@@ -305,6 +324,13 @@ export function PdfViewer({ paper, onClose }: PdfViewerProps) {
     loadingTaskRef.current = null;
     pdfDocumentRef.current = null;
     pageElementsRef.current.clear();
+    pendingZoomAnchorRef.current = null;
+
+    if (zoomRestoreFrameRef.current !== null) {
+      window.cancelAnimationFrame(zoomRestoreFrameRef.current);
+      zoomRestoreFrameRef.current = null;
+    }
+
     setPdfDocument(null);
     setCurrentPage(1);
 
@@ -334,6 +360,108 @@ export function PdfViewer({ paper, onClose }: PdfViewerProps) {
     });
     setCurrentPage(pageNumber);
   }, []);
+
+  const getReadingLineOffset = useCallback((container: HTMLDivElement) => {
+    return Math.min(SCROLL_ANCHOR_OFFSET_PX, Math.max(0, container.clientHeight / 3));
+  }, []);
+
+  const getScrollAnchor = useCallback((): ScrollAnchor | null => {
+    const container = scrollContainerRef.current;
+    if (!container) return null;
+
+    const containerRect = container.getBoundingClientRect();
+    const readingLineY = containerRect.top + getReadingLineOffset(container);
+    let nearestAnchor: ScrollAnchor | null = null;
+    let nearestDistance = Number.POSITIVE_INFINITY;
+
+    [...pageElementsRef.current.entries()]
+      .sort(([pageA], [pageB]) => pageA - pageB)
+      .forEach(([pageNumber, element]) => {
+        const rect = element.getBoundingClientRect();
+        if (rect.height <= 0) return;
+
+        if (readingLineY >= rect.top && readingLineY <= rect.bottom) {
+          nearestAnchor = {
+            pageNumber,
+            offsetRatio: clampRatio((readingLineY - rect.top) / rect.height)
+          };
+          nearestDistance = 0;
+          return;
+        }
+
+        const distance =
+          readingLineY < rect.top ? rect.top - readingLineY : readingLineY - rect.bottom;
+
+        if (distance < nearestDistance) {
+          nearestAnchor = {
+            pageNumber,
+            offsetRatio: readingLineY < rect.top ? 0 : 1
+          };
+          nearestDistance = distance;
+        }
+      });
+
+    return nearestAnchor;
+  }, [getReadingLineOffset]);
+
+  const restoreScrollAnchor = useCallback(
+    (anchor: ScrollAnchor) => {
+      const container = scrollContainerRef.current;
+      const pageElement = pageElementsRef.current.get(anchor.pageNumber);
+      if (!container || !pageElement) return;
+
+      const containerRect = container.getBoundingClientRect();
+      const pageRect = pageElement.getBoundingClientRect();
+      const readingLineOffset = getReadingLineOffset(container);
+      const pageTopInScrollContent = container.scrollTop + pageRect.top - containerRect.top;
+      const nextScrollTop =
+        pageTopInScrollContent + pageRect.height * anchor.offsetRatio - readingLineOffset;
+
+      container.scrollTo({
+        top: Math.max(0, nextScrollTop),
+        behavior: "auto"
+      });
+      setCurrentPage(anchor.pageNumber);
+    },
+    [getReadingLineOffset]
+  );
+
+  const handlePageLayoutChange = useCallback(
+    (pageNumber: number) => {
+      const anchor = pendingZoomAnchorRef.current;
+      if (!anchor || anchor.pageNumber !== pageNumber || loadState !== "ready") return;
+
+      if (zoomRestoreFrameRef.current !== null) {
+        window.cancelAnimationFrame(zoomRestoreFrameRef.current);
+      }
+
+      zoomRestoreFrameRef.current = window.requestAnimationFrame(() => {
+        restoreScrollAnchor(anchor);
+        pendingZoomAnchorRef.current = null;
+        zoomRestoreFrameRef.current = null;
+      });
+    },
+    [loadState, restoreScrollAnchor]
+  );
+
+  const updateZoomWithAnchor = useCallback(
+    (getNextZoom: (currentZoom: number) => number) => {
+      const anchor = getScrollAnchor();
+
+      setZoom((currentZoom) => {
+        const nextZoom = getNextZoom(currentZoom);
+
+        if (nextZoom === currentZoom) {
+          pendingZoomAnchorRef.current = null;
+          return currentZoom;
+        }
+
+        pendingZoomAnchorRef.current = anchor;
+        return nextZoom;
+      });
+    },
+    [getScrollAnchor]
+  );
 
   useEffect(() => {
     const container = scrollContainerRef.current;
@@ -459,14 +587,6 @@ export function PdfViewer({ paper, onClose }: PdfViewerProps) {
   }, [pageCount]);
 
   useEffect(() => {
-    if (loadState !== "ready" || pageCount === 0) return;
-
-    window.requestAnimationFrame(() => {
-      scrollToPage(currentPage, "auto");
-    });
-  }, [zoom, loadState, pageCount, currentPage, scrollToPage]);
-
-  useEffect(() => {
     return () => clearPdfDocument();
   }, [clearPdfDocument]);
 
@@ -499,9 +619,11 @@ export function PdfViewer({ paper, onClose }: PdfViewerProps) {
     };
   }, []);
 
-  const handleZoomOut = () => setZoom((currentZoom) => clampZoom(currentZoom - ZOOM_STEP));
-  const handleZoomIn = () => setZoom((currentZoom) => clampZoom(currentZoom + ZOOM_STEP));
-  const handleResetZoom = () => setZoom(1);
+  const handleZoomOut = () =>
+    updateZoomWithAnchor((currentZoom) => clampZoom(currentZoom - ZOOM_STEP));
+  const handleZoomIn = () =>
+    updateZoomWithAnchor((currentZoom) => clampZoom(currentZoom + ZOOM_STEP));
+  const handleResetZoom = () => updateZoomWithAnchor(() => 1);
   const handlePreviousPage = () => scrollToPage(Math.max(1, currentPage - 1));
   const handleNextPage = () => scrollToPage(Math.min(pageCount, currentPage + 1));
 
@@ -638,6 +760,7 @@ export function PdfViewer({ paper, onClose }: PdfViewerProps) {
                 viewportWidth={viewportWidth}
                 zoom={zoom}
                 registerPage={registerPage}
+                onPageLayoutChange={handlePageLayoutChange}
               />
             ))}
           </div>
